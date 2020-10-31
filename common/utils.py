@@ -2,10 +2,11 @@ import os
 import pickle
 import math
 import time
+import argparse
 import numpy as np
-from numpy.lib.function_base import disp
 import pandas as pd
 import matplotlib.pyplot as plt
+from numpy.lib.function_base import disp
 from sklearn.utils import shuffle
 from collections import defaultdict
 
@@ -93,8 +94,7 @@ def display_images(X,y, signnames, disp_img_ids = None , shape=(4,8), cmap=None,
         disp_img_ids = np.arange(X.shape[0])
 
     cols = min(shape[1], len(disp_img_ids))
-    rows = min(shape[0], math.ceil(len(disp_img_ids)// cols))
-    
+    rows = math.ceil(len(disp_img_ids) / cols)
     fig = plt.figure(figsize=(2.5*cols, 3 * rows))
     
     i = 1
@@ -145,12 +145,12 @@ def display_image(X,y, signnames, disp_img_id , cmap=None, norm=None,
         else:
             ax.tick_params(bottom = False, left=False, labelbottom =False, labelleft=False)
         
-        ax.set_title("img# {} - Channel {}".format(disp_img_id, channel), fontsize=9)
+        ax.set_title("img# {} - Channel {}".format(disp_img_id, channel), fontsize=10, color = 'black')
         
         ax.set_xlabel("min: {:3d}  max: {:3d}  mean: {:.0f}".format(
                         X[disp_img_id][:,:,channel].min(), 
                         X[disp_img_id][:,:,channel].max(), 
-                        X[disp_img_id][:,:,channel].mean()), fontsize=9)
+                        X[disp_img_id][:,:,channel].mean()), fontsize=10, color = 'black')
 
         # if not grid:
         plt.grid(grid)
@@ -166,22 +166,22 @@ def display_image(X,y, signnames, disp_img_id , cmap=None, norm=None,
         ax.tick_params(bottom = False, left=False, labelbottom =False, labelleft=False)
 
     ax.set_title("img# {}".format(disp_img_id), fontsize=9)
-    ax.set_xlabel("label: {:2d}-{:.25s}".format(y[disp_img_id], signnames[y[disp_img_id]]), fontsize=9)
+    ax.set_xlabel("label: {:2d}-{:.25s}".format(y[disp_img_id], signnames[y[disp_img_id]]), fontsize=10, color = 'black')
 
     # if not grid:
     plt.grid(grid)
     surf = plt.imshow(X[disp_img_id].astype(np.uint8), cmap=cmap,
                norm=norm, interpolation=interpolation)
-    cbar = fig.colorbar(surf, shrink=0.7, aspect=30, fraction=0.05)
+    # cbar = fig.colorbar(surf, shrink=0.65, aspect=30, fraction=0.05)
     i += 1
 
-    fig.tight_layout(rect=[0, 0.0, 1, 1], h_pad=h_pad, w_pad = w_pad)
+    # fig.tight_layout(rect=[0, 0.0, 1, 1], h_pad=h_pad, w_pad = w_pad)
     plt.show()    
 
 ##----------------------------------------------------------------------
 ## display_image
 ##----------------------------------------------------------------------    
-def display_label_distribution(y, label_names):
+def display_label_distribution(y, label_names, h_pad = 3, w_pad = 1, title = ' Training Dataset'):
     y_series = pd.Series(y).value_counts().sort_index()
 #     y_series = pd.Series(y_train)
 #     y_series.value_counts()    
@@ -197,12 +197,17 @@ def display_label_distribution(y, label_names):
     plt.xticks(rotation=30)
     ax.set_xticks(x + width//2)
     ax.set_xticklabels( np.arange(0,43,1))
-    ax.set_title(' Sign Distributions', fontsize=15)
-    ax.set_xlabel(' Sign label id', fontsize = 12)    
+    ax.set_title(title+' Label Distributions', fontsize=15)
+    ax.set_xlabel(' Sign Class Id', fontsize = 12)    
     ax.set_ylabel(' Frequency', fontsize = 12)    
-    
+    ax.set_xlim([-0.5,42.5])
+    for i, v in enumerate(y_series):
+        ax.text(i- 0.25, v + 20, str(v), color='blue', fontweight='bold', fontsize=9)
+    # ax.set_ylim(y_lims)    
 
-                
+
+    fig.tight_layout(rect=[0, 0.0, 1, 1], h_pad=h_pad, w_pad = w_pad)
+    plt.show()                    
 ##----------------------------------------------------------------------
 ## display_image
 ##----------------------------------------------------------------------   
@@ -323,19 +328,9 @@ def plot_training_results_by_batchsize(r_dict,  batches = False, rolling_window 
     loss_plot.set_xlim(x_lims)
     loss_plot.set_xlabel(units)
     loss_plot.legend(loc='upper left')
-    
-    ##Validation Loss by batch size 
-    loss_plot = plt.subplot(222)
-    loss_plot.set_title('Validation Loss by batch size')
-    for key in bs_keys:
-        rolling_mean = pd.Series(r_dict[key]['val_loss']).rolling(window=rolling_window).mean()
-        loss_plot.plot(r_dict[key][units],  rolling_mean, label=key)
-    loss_plot.set_xlim(x_lims)
-    loss_plot.set_xlabel(units)
-    loss_plot.legend(loc='upper left')
 
     ##Training Accuracy by batch size 
-    acc_plot = plt.subplot(223)
+    acc_plot = plt.subplot(222)
     acc_plot.set_title('Training accuracy by batch size')
     for key in bs_keys:
         rolling_mean = pd.Series(r_dict[key]['trn_acc']).rolling(window=rolling_window).mean()
@@ -344,6 +339,16 @@ def plot_training_results_by_batchsize(r_dict,  batches = False, rolling_window 
     acc_plot.set_xlim(x_lims)
     acc_plot.set_ylim(y_lims)
     acc_plot.legend(loc='best')
+    
+    ##Validation Loss by batch size 
+    loss_plot = plt.subplot(223)
+    loss_plot.set_title('Validation Loss by batch size')
+    for key in bs_keys:
+        rolling_mean = pd.Series(r_dict[key]['val_loss']).rolling(window=rolling_window).mean()
+        loss_plot.plot(r_dict[key][units],  rolling_mean, label=key)
+    loss_plot.set_xlim(x_lims)
+    loss_plot.set_xlabel(units)
+    loss_plot.legend(loc='upper left')
 
     ##Training Accuracy by batch size 
     acc_plot = plt.subplot(224)
@@ -369,7 +374,7 @@ def save_results(filename, results, results_name):
 # Save the data for easy access
     pickle_file = filename+'.pickle'
 
-    print('Saving data to pickle file...')
+    print(' Saving data to pickle file...')
     try:
         with open(pickle_file, 'wb') as pfile:
             pickle.dump(
@@ -377,10 +382,10 @@ def save_results(filename, results, results_name):
                 pfile, 
                 pickle.HIGHEST_PROTOCOL)
     except Exception as e:
-        print('Unable to save data to', pickle_file, ':', e)
+        print(' Unable to save data to', pickle_file, ':', e)
         raise
     else:
-        print('Data cached in pickle file.', pickle_file)
+        print(' Data saved to pickle file.', pickle_file)
     return 
 
 def load_results(filename):
@@ -392,10 +397,220 @@ def load_results(filename):
             with open(pickle_file, 'rb') as f:
                 pickle_data = pickle.load(f)
         except Exception as e:
-            print('Unable to load data from', pickle_file, ':', e)
+            print(' Unable to load data from', pickle_file, ':', e)
             raise
+        else:
+            print(' Data loaded from pickle_data. Variable name : ', pickle_data.keys())
+            return pickle_data    
     else:
-        print('Error pickle file not found ...')
+        print(' Error pickle file not found ...')
 
-    print('Data loaded from pickle_data. Variable name : ', pickle_data.keys())
-    return pickle_data    
+
+##------------------------------------------------------------------------------------
+## Parse command line arguments
+##  
+## Example:
+## train-shapes_gpu --epochs 12 --steps-in-epoch 7 --last_epoch 1234 --logs_dir mrcnn_logs
+## args = parser.parse_args("train --dataset E:\MLDatasets\coco2014 --model mask_rcnn_coco.h5 --limit 10".split())
+##------------------------------------------------------------------------------------
+def command_line_parser():
+    parser = argparse.ArgumentParser(description='Train Mask R-CNN on MS COCO.')
+
+    # parser.add_argument("command",
+                        # metavar="<command>",
+                        # help="'train' or 'evaluate' on MS COCO")
+
+    # parser.add_argument('--dataset', required=True,
+                        # metavar="/path/to/coco/",
+                        # help='Directory of the MS-COCO dataset')
+    
+    # parser.add_argument('--limit', required=False,
+                        # default=500,
+                        # metavar="<image count>",
+                        # help='Images to use for evaluation (defaults=500)')
+
+    parser.add_argument('--model_config', 
+                        required=True,
+                        default='last',
+                        metavar="model config selection",
+                        help="MRCNN model weights file: 'coco' , 'init' , or Path to weights .h5 file ")
+
+    parser.add_argument('--batch_sizes', 
+                        required=False,
+                        nargs = '+',
+                        type  = int, 
+                        # default=5,
+                        metavar="<batch size>",
+                        help="Number of data samples in each batch (default=5)")                    
+
+    parser.add_argument('--dry-run', 
+                        required=False,
+                        default=False,
+                        action='store_true',
+                        help="dry run  ")
+
+    parser.add_argument('--ckpt_dir', 
+                        required=False,
+                        default='./checkpoints/',
+                        metavar="<checkpoint folder>",
+                        help="Model checkpoints directory (default=logs/)")
+
+    parser.add_argument('--results_filename', 
+                        required=False,
+                        default=None,  
+                        metavar="<results folder>",
+                        help="Model checkpoints directory (default=./results/)")
+
+    parser.add_argument('--results_dir', 
+                        required=False,
+                        default='./results/',
+                        metavar="<results folder>",
+                        help="Model checkpoints directory (default=./results/)")
+
+    parser.add_argument('--training_schedule', 
+                        required=False,
+                        nargs = '+',
+                        default=None, type=int, 
+                        metavar="<active coco classes>",
+                        help="<identifies active coco classes" )
+
+    parser.add_argument('--epochs', required=False,
+                        default=1,
+                        metavar="<epochs to run>",
+                        help="Number of epochs to run (default=3)")
+                        
+    parser.add_argument('--steps_in_epoch', required=False,
+                        default=1,
+                        metavar="<steps in each epoch>",
+                        help="Number of batches to run in each epochs (default=5)")
+
+    parser.add_argument('--val_steps', required=False,
+                        default=1,
+                        metavar="<val steps in each epoch>",
+                        help="Number of validation batches to run at end of each epoch (default=1)")
+                        
+
+    # parser.add_argument('--mrcnn_exclude_layers', 
+    #                     required=False,
+    #                     nargs = '+',
+    #                     type=str.lower, 
+    #                     metavar="/path/to/weights.h5",
+    #                     help="layers to exclude from loading from weight file" )
+                        
+
+    # parser.add_argument('--mrcnn_layers', 
+    #                     required=False,
+    #                     nargs = '+',
+    #                     default=['mrcnn', 'fpn', 'rpn'], type=str.lower, 
+    #                     metavar="/path/to/weights.h5",
+    #                     help="MRCNN layers to train" )
+                        
+    # parser.add_argument('--evaluate_method', 
+    #                     required=False,
+    #                     choices = [1,2,3],
+    #                     default=1, type = int, 
+    #                     metavar="<evaluation method>",
+    #                     help="Detection Evaluation method : [1,2,3]")
+                        
+    # parser.add_argument('--fcn_model', 
+    #                     required=False,
+    #                     default='last',
+    #                     metavar="/path/to/weights.h5",
+    #                     help="FCN model weights file: 'init' , or Path to weights .h5 file ")
+
+    # parser.add_argument('--fcn_logs_dir', required=False,
+    #                     default='train_fcn',
+    #                     metavar="/path/to/logs/",
+    #                     help="FCN Logs and checkpoints directory (default=logs/)")
+
+    # parser.add_argument('--fcn_arch', required=False,
+    #                     choices=['FCN32', 'FCN16', 'FCN8', 'FCN8L2', 'FCN32L2'],
+    #                     default='FCN32', type=str.upper, 
+    #                     metavar="/path/to/weights.h5",
+    #                     help="FCN Architecture : fcn32, fcn16, or fcn8")
+
+    # parser.add_argument('--fcn_layers', required=False,
+    #                     nargs = '+',
+    #                     default=['fcn32+'], type=str.lower, 
+    #                     metavar="/path/to/weights.h5",
+    #                     help="FCN layers to train" )
+
+    # parser.add_argument('--fcn_losses', required=False,
+    #                     nargs = '+',
+    #                     default='fcn_BCE_loss', 
+    #                     metavar="/path/to/weights.h5",
+    #                     help="FCN Losses: fcn_CE_loss, fcn_BCE_loss, fcn_MSE_loss" )
+                        
+    # parser.add_argument('--fcn_bce_loss_method', required=False,
+    #                     choices = [1,2],
+    #                     default=1, type = int, 
+    #                     metavar="<BCE Loss evaluation method>",
+    #                     help="Evaluation method : [1: Loss on all classes ,2: Loss on one class only]")
+                        
+    # parser.add_argument('--fcn_bce_loss_class', required=False,
+    #                     default=0, type = int, 
+    #                     metavar="<BCE Loss evaluation class>",
+    #                     help="Evaluation class")
+
+    # parser.add_argument('--last_epoch', required=False,
+    #                     default=0,
+    #                     metavar="<last epoch ran>",
+    #                     help="Identify last completed epcoh for tensorboard continuation")
+                        
+
+    # parser.add_argument('--scale_factor', required=False,
+    #                     default=4,
+    #                     metavar="<heatmap scale>",
+    #                     help="Heatmap scale factor")                    
+
+    # parser.add_argument('--lr', required=False,
+    #                     default=0.001,
+    #                     metavar="<learning rate>",
+    #                     help="Learning Rate (default=0.001)")
+
+    # parser.add_argument('--opt', required=False,
+    #                     default='adagrad', type = str.upper,
+    #                     metavar="<optimizer>",
+    #                     help="Optimization Method: SGD, RMSPROP, ADAGRAD, ...")
+                        
+    # parser.add_argument('--sysout', required=False,
+    #                     choices=['SCREEN', 'HEADER', 'ALL'],
+    #                     default='screen', type=str.upper,
+    #                     metavar="<sysout>",
+    #                     help="sysout destination: 'screen', 'header' , 'all' (header == file) ")
+
+    # parser.add_argument('--new_log_folder', required=False,
+    #                     default=False, action='store_true',
+    #                     help="put logging/weights files in new folder: True or False")
+
+    # parser.add_argument('--dataset', required=False,
+    #                     choices=['newshapes', 'newshapes2', 'coco2014'],
+    #                     default='newshapes', type=str, 
+    #                     metavar="<Toy dataset type>",
+    #                     help="<identifies toy dataset: newshapes or newshapes2" )
+    
+    return parser
+
+        
+def display_input_parms(args):
+    """Display Configuration values."""
+    print("\n   Arguments passed :")
+    print("   --------------------")
+    for a in dir(args):
+        if not a.startswith("__") and not callable(getattr(args, a)):
+            print("   {:30} {}".format(a, getattr(args, a)))
+    print("\n")
+ 
+def get_from_config(config_file, arch):
+    config_dict = {arch : {}}
+
+    for opt in config_file[arch].keys():
+        # print(opt, '    ', config_file[arch][opt])
+        if opt == 'ckpt_prefix':
+            config_dict[arch][opt] = config_file.get(arch, opt)
+        elif opt in ['drop_rate', 'sigma', 'mu']:
+            config_dict[arch][opt] = config_file.getfloat(arch,opt)
+        else:
+            config_dict[arch][opt] = config_file.getint(arch,opt)
+
+    return config_dict

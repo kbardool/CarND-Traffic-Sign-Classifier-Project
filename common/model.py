@@ -1,3 +1,4 @@
+import os, sys
 from collections import defaultdict
 from common.utils import results_dict
 import math
@@ -6,8 +7,15 @@ from tqdm import tqdm, trange
 from sklearn.utils import shuffle
 from datetime import datetime
 
-def run_model_training(trn_datagen, vld_datagen, model_config, results = None, 
-                       starting_epoch = None , epochs = 1, batch_size = 64, learning_rate = 0.001,
+sys.path.append('..')
+
+def run_model_training(trn_datagen, vld_datagen, 
+                       model_config, 
+                       results = None, 
+                       starting_epoch = None , 
+                       epochs = 1, 
+                       batch_size = 64, 
+                       learning_rate = 0.001,
                        training_batches = None, 
                        validation_batches = None,
                        reload = False , 
@@ -38,7 +46,7 @@ def run_model_training(trn_datagen, vld_datagen, model_config, results = None,
     results['bpe'] = training_batches
     results['val_bpe'] = validation_batches
     results['batch_size'] = batch_size
-    results['drop_rate']= model_config['drop_rate']
+    results['drop_rate'] = model_config['drop_rate']
 
     logging_interval = 50
     ending_epoch = starting_epoch + epochs - 1
@@ -91,9 +99,9 @@ def run_model_training(trn_datagen, vld_datagen, model_config, results = None,
             ckpt_written = False
             session.run(tf.global_variables_initializer())
         
+        
+        for epoch_i in range(starting_epoch, ending_epoch + 1, 1): 
 
-
-        for epoch_i in range(starting_epoch, ending_epoch + 1, 1):   
             ttl_val_accuracy = 0.0
             ttl_val_loss     = 0.0
 
@@ -148,9 +156,10 @@ def run_model_training(trn_datagen, vld_datagen, model_config, results = None,
                 ttl_val_loss     += val_loss
             val_accuracy = ttl_val_accuracy / validation_batches
             val_loss     = ttl_val_loss / validation_batches
+            validation_pbar.set_postfix(loss=val_loss, acc = '{:.4f}'.format(val_accuracy) )
 
 #           print("EPOCH {} ... Last Train Accuracy = {:.3f}    Last Train loss = {:.3f} ".format(epoch_i, trn_accuracy, trn_loss), flush = True)
-            print("EPOCH {} ... Validation Accuracy = {:.4f}   Best Acc {:.4f}  Validation loss = {:.4f} ".format(
+            print("      EPOCH {} ... Validation Accuracy = {:.4f}   Best Acc {:.4f}  Validation loss = {:.4f} ".format(
                     epoch_i, val_accuracy, results['best_val_acc'] , val_loss),   flush = True)
     
             ttl_batches += training_batches     ## (batch_i % log_batch_step) 
@@ -165,7 +174,7 @@ def run_model_training(trn_datagen, vld_datagen, model_config, results = None,
 
             if val_accuracy > results['best_val_acc']:
                 suffix = datetime.now().strftime("%y%m%d%H%M%S")
-                ckpt_file = './checkpoints/'+model_config['config']+'_bs'+str(batch_size)+\
+                ckpt_file = './checkpoints/'+model_config['ckpt_prefix']+'_bs'+str(batch_size)+\
                      '_ep'+str(epoch_i)+'_dr'+str(model_config['drop_rate'])+'_'+suffix
                 saver.save(session, ckpt_file)
                 print(' {:7.4f}  >  {:7.4f}  - Write to checkpoint {}'.format(val_accuracy, results['best_val_acc'], ckpt_file),flush=True)
@@ -178,7 +187,7 @@ def run_model_training(trn_datagen, vld_datagen, model_config, results = None,
 
         if not ckpt_written:
             suffix = datetime.now().strftime("%y%m%d%H%M%S")
-            ckpt_file = './checkpoints/'+model_config['config']+'_bs'+str(batch_size)+\
+            ckpt_file = './checkpoints/'+model_config['ckpt_prefix']+'_bs'+str(batch_size)+\
                         '_ep'+str(ending_epoch)+'_dr'+str(model_config['drop_rate'])+'_'+suffix
             saver.save(session, ckpt_file)
             results['last_ckpt'] = ckpt_file
@@ -232,11 +241,11 @@ def dropout(x, drop_rate = 0.00, name = 'dropout'):
     layer = tf.nn.dropout(x, rate = drop_rate, name = name)
     return layer 
 
-def model(x, model_config, mu = 0, sigma = 0.1, drop_rate = 0.00, debug = False):
+def model(x, model_config, mu = 0.0, sigma = 0.1, drop_rate = 0.00, debug = False):
 
     weights   = model_config['weights']
     biases    = model_config['biases']    
-    drop_rate = model_config['drop_rate']
+    drop_rate = float(model_config['drop_rate'])
     
     if debug:
         print(weights, biases)
@@ -283,15 +292,15 @@ def model_optimization(logits, y_onehot , LR = 0.1):
 
 def def_weights_biases(model_config):
 
-    mu        = model_config.get('mu', 0) 
-    sigma     = model_config.get('sigma', 0.1)
-    f1_size   = model_config.get('f1_size'   , 5)
-    f2_size   = model_config.get('f2_size'   , 5)
-    l1_units  = model_config.get('l1_units'  , 16)
-    l2_units  = model_config.get('l2_units'  , 16)
-    fc1_units = model_config.get('fc1_units' , 240)
-    fc2_units = model_config.get('fc2_units' , 240)
-    fc3_units = model_config.get('fc3_units' , 43)
+    mu        = model_config['mu']
+    sigma     = model_config['sigma']
+    f1_size   = model_config['f1_size'  ]
+    f2_size   = model_config['f2_size'  ]
+    l1_units  = model_config['l1_units' ]
+    l2_units  = model_config['l2_units' ]
+    fc1_units = model_config['fc1_units']
+    fc2_units = model_config['fc2_units']
+    fc3_units = model_config['fc3_units']
 
     model_config['weights'] = {
         'W1' : tf.Variable(tf.truncated_normal([f1_size,f1_size,3,l1_units], mean = mu, stddev = sigma), name = 'CONV1_W', dtype=tf.float32),
@@ -309,6 +318,7 @@ def def_weights_biases(model_config):
         'FC3' : tf.Variable(tf.truncated_normal([fc3_units], mean = mu, stddev = sigma), name = 'FC3', dtype=tf.float32)
     }    
 
+    return
 
 '''
 def evaluate(sess, x_data, y_data, batch_size, eval_ops):
@@ -333,4 +343,3 @@ def evaluate(sess, x_data, y_data, batch_size, eval_ops):
 
     return  total_loss,total_accuracy   
 '''
-    return

@@ -8,3 +8,6 @@ models
 *.pyc
 checkpoints
 untitled.ipynb
+Writeup-AdvancedLaneFinding.md
+.vscode
+.old_results
