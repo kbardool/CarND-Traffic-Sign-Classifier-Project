@@ -45,14 +45,9 @@ Link to my [project code](https://github.com/kbardool/CarND-Traffic-Sign-Classif
 
 #### 1.1 Provide a basic summary of the data set. In the code, the analysis should be done using python, numpy and/or pandas methods rather than hardcoding results manually.
 
-I used the pandas library to calculate summary statistics of the traffic
-signs data set:
+Numpy and pandas methods were used to calculate summary statistics of the traffic
+signs data set. The code for this is in `Traffic_Sign_Classifier.ipynb` section 3.1.
 
-* The size of training set is ?
-* The size of the validation set is ?
-* The size of test set is ?
-* The shape of a traffic sign image is ?
-* The number of unique classes/labels in the data set is ?
 
 ```python
 
@@ -93,7 +88,7 @@ signs data set:
 ```
 #### 1.2 Include an exploratory visualization of the dataset.
 
-Here is an exploratory visualization of the data set. It is a bar chart showing how the data ...
+* The following three histograms illustrate the distribution of various classes within the training, validation, and test datasets. We see that all three datasets follow identical distributions.
 
 <!-- ![alt text][image1] -->
 
@@ -107,8 +102,14 @@ Here is an exploratory visualization of the data set. It is a bar chart showing 
 </figure>
 <br>
 
+* Random selection of images from the training dataset: 
 
+<figure>
+<img title="undistorted test4" alt="alt" src="./writeup_images/sample_images.png"  style="margin:1px 1px;width: 100%" />
+<p align="center">&nbsp &nbsp  Augmentation Example - Original Images<br> &nbsp</p>
+</figure>
 
+* Visualization the RGB channels of three sample images:
 <figure>
 <img title="undistorted test4" alt="alt" src="./writeup_images/image_26470.png"  style="margin:1px 1px;width: 100%" />
 <img title="undistorted test4" alt="alt" src="./writeup_images/image_8143.png"  style="margin:1px 1px;width: 100%" />
@@ -117,26 +118,30 @@ Here is an exploratory visualization of the data set. It is a bar chart showing 
 </figure>
 <br>
 
-
-
 ## 2. Data Preprocessing 
 
 #### 2.1 Describe how you preprocessed the image data. What techniques were chosen and why did you choose these techniques? Consider including images showing the output of each preprocessing technique.Pre-processing refers to techniques such as converting to grayscale, normalization, etc. 
 
 **(OPTIONAL: As described in the "Stand Out Suggestions" part of the rubric, if you generated additional data for training, describe why you decided to generate additional data, how you generated the data, and provide example images of the additional data. Then describe the characteristics of the augmented training set like number of images in the set, number of images for each class, etc.)**
 
-As a first step, I decided to convert the images to grayscale because ...
+I decided to design my model to use the color, RGB images as input. My motivation for this was the fact that most real world image classification models also use color images as input , and using a color image better reflect real world classification tasks. 
 
-Here is an example of a traffic sign image before and after grayscaling.
+Originally I used a non-augmented dataset where the images were simply normalized to [-1 , 1] range to study the training performance on a non-augmented dataset. Based on the results, I decided to augment the dataset with random variations of the training images. For this, I used the the Keras Image Preprocessing `ImageDataGenerator()` method randomly augment the training images, which greatly simplifies the augmentation process, at the cost of the additional time needed to apply real-time image randomizations during the training process.
 
 
-As a last step, I normalized the image data because ...
+```python
+trn_datagen = ImageDataGenerator(featurewise_center=True,
+                                 featurewise_std_normalization = True,
+                                 rotation_range=10,
+                                 width_shift_range=0.2,
+                                 height_shift_range=0.2,
+                                 zoom_range=0.2,
+                                 data_format = 'channels_last')
+```
+The type of augmentation selected included rotations, horizontal and vertical shifts, and zooming. I decided not to apply transposing around the horizontal or vertical axis.
 
-I decided to generate additional data because ... 
+Although this normally not applied, I decided to also augment to the validation images using the same augmentation methods. My motivation was increasing the randomness of the validation data, which in turn would lessen reduce the bias towards validation data.
 
-To add more data to the the data set, I used the following techniques because ... 
-
-Here is an example of an original image and an augmented image:
 
 <figure>
 <img title="undistorted test4" alt="alt" src="./writeup_images/image_augmentation_before.png"  style="margin:1px 1px;width: 100%" />
@@ -147,28 +152,46 @@ Here is an example of an original image and an augmented image:
 <br>
 <br>
 
-![alt text][image3]
+<!-- ![alt text][image3] -->
 
 The difference between the original data set and the augmented data set is the following ... 
+
+#### Data Augmentation
+[Data Augmentation](https://www.pyimagesearch.com/2019/07/08/keras-imagedatagenerator-and-data-augmentation/)
 
 ## 3. Model Architecture Design and Test 
 
 I selected to start with the relatively simple LeNet model as a baseline template. There were two main reasons behind this selection. First,  was the fact that the input data is relatively simple (32 x 32 x 3); a larger, more sophisticated model could easily overfit the training data. Second, I intended to study the effects of various adjustments in the architecture on various aspects of model training and final model accuracy.  
 
-We name the baseline architecture Arch1. Subsequent architectures are named Arch2, Arch3, etc...A table listing all the various model configurations along with their corresponding parameters is listed in the following table:
+We name the baseline LeNet architecture Arch0. Subsequent architectures are named Arch1, Arch2, etc.. model configurations along with their corresponding parameters are listed below:
 
-| Layer               | Filter | Stride | Arch1|  A2  |  A3  |  A4  |  A5  |  A6  |  A7  | Output Shape     | 
-|:-------------------:|:------:|:------:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----------------:|
-| Conv Layer 1 5x5 	  | 5 x 5  |    1   |   6  | 16   |  6   |  16  |  32  |  16  |  32  | 28x28 x #filters |
-| MaxPool 1           | 2 x 2  |    2   |      |      |      |      |      |      |      | 14x14 x #filters |
-| Conv Layer 2 5x5    | 5 x 5  |    1   | 16   |  16  | 10   |  16  |  16  |  32  |  32  | 10x10 x #filters |
-| MaxPool 2           | 2 x 2  |    2   |      |      |      |      |      |      |      |  5x5  x #filters |
-| MaxPool 2 Flattened |    -   |    -   | 400  | 400  | 250  | 400  | 400  | 800  | 800  |                  |
-| FC 1		          |    -   |    -   | 120  | 240  | 120  | 240  | 240  | 240  | 240  |                  | 
-| FC 2		          |    -   |    -   | 120  | 120  |  80  | 240  | 240  | 240  | 240  |                  | 
-| FC 3 (Logits)       |    -   |    -   | 43   | 43   | 43   | 43   | 43   | 43   | 43   |                  | 
+Arch00 is has a *simpler* architecture than the LeNet Architecture.
+
+Arch2 - Arch7 have progressively *more complex* architectures than  the LeNet Architecture. 
+
+| Layer            | Filter | Stride |  A00  | A0   |  A1  |  A2  |  A3  |  A4  |  A5  |  A6  |  A7  | Output Shape     | 
+|:----------------:|:------:|:------:|:-----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----------------:|
+| Conv Layer 1 5x5 | 5 x 5  |    1   |    6  |  6   |**16**|  16  |  16  |  16  |  32  |  16  |  32  | 28x28 x #filters |
+| MaxPool 1        | 2 x 2  |    2   |       |      |      |      |      |      |      |      |      | 14x14 x #filters |
+| Conv Layer 2 5x5 | 5 x 5  |    1   |   10  |  16  |  16  |  16  |  16  |  16  |  16  |  32  |  32  | 10x10 x #filters |
+| MaxPool 2        | 2 x 2  |    2   |       |      |      |      |      |      |      |      |      |  5x5  x #filters |
+| Flattened        |    -   |    -   |  250  | 400  | 400  | 400  | 400  | 400  | 400  | 800  | 800  |                  |
+| FC 1		         |    -   |    -   |  120  | 120  | 120  | 240  | 120  | 240  | 240  | 240  | 240  |                  | 
+| FC 2		         |    -   |    -   |   80  | 120  | 120  | 120  | 240  | 240  | 240  | 240  | 240  |                  | 
+| FC 3 (Logits)    |    -   |    -   |   43  | 43   | 43   | 43   | 43   | 43   | 43   | 43   | 43   |                  | 
 
 
+| Model   |  Filter  | Conv1 | MaxP1 | Conv2  | MaxP2 | Flatten |  FC1 |  FC2  |  FC3   | Notes      | 
+|:-------:|:--------:|:-----:|:-----:|:------:|:-----:|:-------:|:----:|:-----:|:------:|:----------:|
+| A00     |  5 x 5   |    6  |  2x2  |   10   |  2x2  |   250   |  120 |   80  |   43   |            |
+| A0      |  5 x 5   |    6  |  2x2  |   16   |  2x2  |   400   |  120 |  120  |   43   |            |
+| A1      |  5 x 5   |   16  |  2x2  |   16   |  2x2  |   400   |  120 |  120  |   43   |            |
+| A2      |  5 x 5   |   16  |  2x2  |   16   |  2x2  |   400   |  240 |  120  |   43   |            |
+| A3      |  5 x 5   |   16  |  2x2  |   16   |  2x2  |   400   |  120 |  240  |   43   |            |
+| A4      |  5 x 5   |   16  |  2x2  |   16   |  2x2  |   400   |  240 |  240  |   43   |            |
+| A5      |  5 x 5   |   32  |  2x2  |   16   |  2x2  |   400   |  240 |  240  |   43   |            |
+| A6      |  5 x 5   |   16  |  2x2  |   32   |  2x2  |   800   |  240 |  240  |   43   |            |
+| A7      |  5 x 5   |   32  |  2x2  |   32   |  2x2  |   800   |  240 |  240  |   43   |            |
 #### 3.1 Describe what your final model architecture looks like including model type, layers, layer sizes, connectivity, etc.) Consider including a diagram and/or table describing the final model.
 
 My final model consisted of the following layers:
@@ -176,25 +199,25 @@ My final model consisted of the following layers:
 
 
 
-| Layer         		  |  A4  |  A5  |  A6  |  A7  | output         |    		
-|:-----------------------:|:----:|:----:|:----:|:----:|:--------------:|
+| Layer              		  |  A4  |  A5  |  A6  |  A7  | output           |    		
+|:-----------------------:|:----:|:----:|:----:|:----:|:----------------:|
 | Conv Layer 1 5x5 	      |  16  |  32  |  16  |  32  | 28x28 x #filters |
-| Max pooling 1  2x2	  |      |      |      |      | 14x14 x #filters |
+| Max pooling 1  2x2	    |      |      |      |      | 14x14 x #filters |
 | Conv Layer 2 5x5        |  16  |  16  |  32  |  32  | 10x10 x #filters |
-| RELU                 	  |      |      |      |      |                |
-| Max Pooling 2  2x2      | 2x2  | 2x2  | 2x2  | 2x2  |  5x5 x #filters |
-| Flattened from MaxPool2 | 400  | 400  | 800  | 800  |
-| FC 1		              | 240  | 240  | 240  | 240  |                | 
-| Dropout 1				  | 0.5  | 0.5  | 0.5  | 0.5  |                |	
-| FC 2		              | 240  | 240  | 240  | 240  |                | 
-| Dropout 2				  | 0.5  | 0.5  | 0.5  | 0.5  |                |	
-| FC 3 (Logits)           | 43   | 43   | 43   | 43   |                | 
+| RELU                 	  |      |      |      |      |                  |
+| Max Pooling 2  2x2      | 2x2  | 2x2  | 2x2  | 2x2  |  5x5 x #filters  |
+| Flattened from MaxPool2 | 400  | 400  | 800  | 800  |                  |  
+| FC 1		                | 240  | 240  | 240  | 240  |                  | 
+| Dropout 1				        | 0.5  | 0.5  | 0.5  | 0.5  |                  |	
+| FC 2		                | 240  | 240  | 240  | 240  |                  | 
+| Dropout 2				        | 0.5  | 0.5  | 0.5  | 0.5  |                  |	
+| FC 3 (Logits)           | 43   | 43   | 43   | 43   |                  | 
  
  
-#### Data Augmentation
-[Data Augmentation](https://www.pyimagesearch.com/2019/07/08/keras-imagedatagenerator-and-data-augmentation/)
 
-#### 2.3 Describe how you trained your model. The discussion can include the type of optimizer, the batch size, number of epochs and any hyperparameters such as learning rate.
+
+## 4.Training
+### 4.1 Describe how you trained your model. The discussion can include the type of optimizer, the batch size, number of epochs and any hyperparameters such as learning rate.
 
 For model training I implemented the function `run_training()`  (`common/model.py`, lines 12-200). We pass the data to this function:
 
@@ -216,6 +239,30 @@ We define a standard training schedule for training all architectures:
 #### 2.4 Describe the approach taken for finding a solution and getting the validation set accuracy to be at least 0.93. Include in the discussion the results on the training, validation and test sets and where in the code these were calculated. 
 **Your approach may have been an iterative process, in which case, outline the steps you took to get to the final solution and why you chose those steps. Perhaps your solution involved an already well known implementation or architecture. In this case, discuss why you think the architecture is suitable for the current problem.**
 
+
+
+
+| epochs    |arch_00| arch_0|  arch_1  | arch_2 |  arch_3 | arch_4 | arch_5 | arch_6 | arch_7 |
+|:---------:|:-----:|:-----:|:--------:|:------:|:-------:|:------:|:------:|:------:|:------:|
+| Conv 1    |   6   |    6  |    16    |   16   |    16   |   16   |   32   |   16   |   32   | 
+| Conv 2    |  10   |   16  |    16    |   16   |    16   |   16   |   16   |   32   |   32   |
+| FC 1      | 120   |  120  |   120    |  240   |   120   |  240   |  240   |  240   |  240   |
+| FC 2      |  80   |  120  |   120    |  120   |   240   |  240   |  240   |  240   |  240   |
+| Logits    |  43   |   43  |   43     |  43    |   43    |   43   |   43   |   43   |   43   |
+
+
+#### Batchsize:  64 - Dropout: 0.5
+| epochs |  arch 00 |  arch 0  |  arch1   |  arch2   |  arch3   |  arch41  |  arch5   |  arch6   |  arch7   |
+|:------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|
+|   50   |  0.7289  |  0.8037  |  0.8649  |  0.8583  |  0.8347  |  0.8962  |  0.8494  |  0.9211  |  0.9140  |
+|  100   |  0.7601  |  0.8401  |  0.9041  |  0.8831  |  0.8876  |  0.9162  |  0.8829  |  0.9348  |  0.9317  |
+|  200   |  0.7780  |  0.8538  |  0.9062  |  0.9078  |  0.8937  |  0.9102  |  0.9053  |  0.9476  |  0.9502  |
+|  300   |  0.7992  |  0.8771  |  0.9296  |  0.9265  |  0.9125  |  0.9453  |  0.9242  |  0.9522  |  0.9549  |
+|  400   |  0.8148  |  0.8898  |  0.9404  |  0.9369  |  0.9161  |  0.9531  |  0.9351  |  0.9594  | **0.9614**  |
+|  500   |  0.8180  |  0.8912  |  0.9404  |  0.9369  |  0.9229  |  0.9547  |  0.9381  |  0.9610  |  0.9614  |
+
+<p align="left">&nbsp &nbsp  Validation Accuracy on models A00 - A7 (Dropout = 0.5)</p>
+
 My final model results were:
 * training set accuracy of ?
 * validation set accuracy of ? 
@@ -223,14 +270,36 @@ My final model results were:
 
 If an iterative approach was chosen:
 * What was the first architecture that was tried and why was it chosen?
+
+  The first architecture tested was the LeNet architecture, which had been modified to accept an RGB input.  The motivation was to select a relatively simple architecture, in order to study and quantify the impact of incremental modifications to the network. 
+
 * What were some problems with the initial architecture?
+
+<figure>
+<img title="Arch0-NoDropout" alt="alt" src="./writeup_images/Arch0_bs32_rw1.png"  style="margin:1px 1px;width: 100%" />
+
+<img title="Arch0-NoDropout" alt="alt" src="./writeup_images/Arch0_bs64_rw1.png"  style="margin:1px 1px;width: 100%" />
+<p align="center">&nbsp &nbsp  Loss and Accuracy Training the LeNet architecture. Top: training with a batchsize of 32. Bottom: training with a batch size of 64. </p>
+</figure>
+<br>
+<br>
+
 * How was the architecture adjusted and why was it adjusted? Typical adjustments could include choosing a different model architecture, adding or taking away layers (pooling, dropout, convolution, etc), using an activation function or changing the activation function. One common justification for adjusting an architecture would be due to overfitting or underfitting. A high accuracy on the training set but low accuracy on the validation set indicates over fitting; a low accuracy on both sets indicates under fitting.
+
 * Which parameters were tuned? How were they adjusted and why?
+
 * What are some of the important design choices and why were they chosen? For example, why might a convolution layer work well with this problem? How might a dropout layer help with creating a successful model?
 
-If a well known architecture was chosen:
+##### If a well known architecture was chosen:
+
 * What architecture was chosen?
+
+  The LeNet architecture was chosen as the baseline architecture, modified to accept an 3-Channel RGB input instead of a single-channel grayscale image.  The motivation was to select a relatively simple architecture as a baseline, making incremental changes to the network, and measure the impact of these modifications to the network's accuracy rate.
+
 * Why did you believe it would be relevant to the traffic sign application?
+
+  The LeNet architecture was designed to classify small (32 x 32 pixel) grayscale images. Compared to more recent architectures it is considered a lighter architecture,which reduces the chances of overfitting on this dataset. Also training a smaller model is faster, and allows us to experiment with various variations of the architecture. 
+
 * How does the final model's accuracy on the training, validation and test set provide evidence that the model is working well?
  
 
@@ -245,7 +314,8 @@ Here are five German traffic signs that I found on the web:
 
 The first image might be difficult to classify because ...
 
-#### 2. Discuss the model's predictions on these new traffic signs and compare the results to predicting on the test set. At a minimum, discuss what the predictions were, the accuracy on these new predictions, and compare the accuracy to the accuracy on the test set (OPTIONAL: Discuss the results in more detail as described in the "Stand Out Suggestions" part of the rubric).
+#### 2. Discuss the model's predictions on these new traffic signs and compare the results to predicting on the test set. At a minimum, discuss what the predictions were, the accuracy on these new predictions, and compare the accuracy to the accuracy on the test set 
+#### (OPTIONAL: Discuss the results in more detail as described in the "Stand Out Suggestions" part of the rubric).
 
 Here are the results of the prediction:
 
@@ -260,7 +330,9 @@ Here are the results of the prediction:
 
 The model was able to correctly guess 4 of the 5 traffic signs, which gives an accuracy of 80%. This compares favorably to the accuracy on the test set of ...
 
-#### 3. Describe how certain the model is when predicting on each of the five new images by looking at the softmax probabilities for each prediction. Provide the top 5 softmax probabilities for each image along with the sign type of each probability. (OPTIONAL: as described in the "Stand Out Suggestions" part of the rubric, visualizations can also be provided such as bar charts)
+#### 3. Describe how certain the model is when predicting on each of the five new images by looking at the softmax probabilities for each prediction. Provide the top 5 softmax probabilities for each image along with the sign type of each probability. 
+
+#### (OPTIONAL: as described in the "Stand Out Suggestions" part of the rubric, visualizations can also be provided such as bar charts)
 
 The code for making predictions on my final model is located in the 11th cell of the Ipython notebook.
 

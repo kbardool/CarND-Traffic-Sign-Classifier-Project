@@ -105,11 +105,14 @@ def run_model_training(trn_datagen, vld_datagen,
             ttl_val_accuracy = 0.0
             ttl_val_loss     = 0.0
 
+            ttl_trn_accuracy = 0.0
+            ttl_trn_loss     = 0.0
+
             # Progress bar
             batches_pbar = tqdm(range(training_batches), 
                                 desc='Epoch {:>2}/{} Training  '.format(epoch_i, ending_epoch), 
                                 postfix={'acc': acc , 'loss': loss },
-                                unit='batches', ncols =130)
+                                unit='batches', ncols =130, mininterval=3)
 
             # Training cycle (batch_i)
             for _ in batches_pbar:
@@ -123,9 +126,13 @@ def run_model_training(trn_datagen, vld_datagen,
                 
                 trn_accuracy, trn_loss, _ = session.run([ accuracy_operation,loss_operation,training_operation], 
                                                       feed_dict = {x_input: X_batch, y_input: y_batch}) 
+                batches_pbar.set_postfix( acc = '{:.4f}'.format(trn_accuracy), loss='{:.4f}'.format(trn_loss) )
 
-                batches_pbar.set_postfix(loss=trn_loss, acc = '{:.4f}'.format(trn_accuracy) )
+                ttl_trn_accuracy += trn_accuracy
+                ttl_trn_loss     += trn_loss
 
+                trn_accuracy = ttl_trn_accuracy / training_batches
+                trn_loss     = ttl_trn_loss     / training_batches
 
                 # if   (batch_i % logging_interval== 0 ):
                     # Calculate Validation accuracy
@@ -151,16 +158,15 @@ def run_model_training(trn_datagen, vld_datagen,
             for _ in validation_pbar:
                 X_batch, y_batch = vld_datagen.next()                    
                 val_accuracy, val_loss = session.run([accuracy_operation, loss_operation], feed_dict={x_input: X_batch, y_input: y_batch})
-                validation_pbar.set_postfix(loss=val_loss, acc = '{:.4f}'.format(val_accuracy) )
+                validation_pbar.set_postfix( acc = '{:.4f}'.format(val_accuracy), loss='{:.4f}'.format(val_loss) )
                 ttl_val_accuracy += val_accuracy
                 ttl_val_loss     += val_loss
             val_accuracy = ttl_val_accuracy / validation_batches
             val_loss     = ttl_val_loss / validation_batches
-            validation_pbar.set_postfix(loss=val_loss, acc = '{:.4f}'.format(val_accuracy) )
+            validation_pbar.set_postfix(acc = '{:.4f}'.format(val_accuracy), loss= '{:.4f}'.format(val_loss) )
 
-#           print("EPOCH {} ... Last Train Accuracy = {:.3f}    Last Train loss = {:.3f} ".format(epoch_i, trn_accuracy, trn_loss), flush = True)
-            print("      EPOCH {} ... Validation Accuracy = {:.4f}   Best Acc {:.4f}  Validation loss = {:.4f} ".format(
-                    epoch_i, val_accuracy, results['best_val_acc'] , val_loss),   flush = True)
+            print("      EPOCH {} ... Trn Acc = {:.4f}   Trn loss = {:.4f}    Best Acc {:.4f}    Val Acc = {:.4f}   Val loss = {:.4f} ".format(
+                     epoch_i, trn_accuracy, trn_loss, results['best_val_acc'] , val_accuracy, val_loss),   flush = True)
     
             ttl_batches += training_batches     ## (batch_i % log_batch_step) 
 
@@ -203,8 +209,7 @@ def run_model_training(trn_datagen, vld_datagen,
     return results
 
 
-### Define your architecture here.
-### Feel free to use as many code cells as needed.
+
 
 def conv2d(x, W, b , stride = 1, name = 'layer', padding = 'VALID', activation = 'RELU'):
     layer  = tf.nn.conv2d(x, W, strides = [1,stride,stride,1], padding = padding)
@@ -343,3 +348,103 @@ def evaluate(sess, x_data, y_data, batch_size, eval_ops):
 
     return  total_loss,total_accuracy   
 '''
+
+def run_model_inference(test_datagen, 
+                       model_config, 
+                       results = None, 
+                       epochs = 1, 
+                       batch_size = 64, 
+                       inference_batches = None, 
+                       reload = True , 
+                       ckpt_file = None):
+    
+    ## make sure drop_rate is zero
+    model_config['drop_rate'] = 0.0
+    
+    tf.reset_default_graph()
+    
+    ## define variables and input placeholders 
+    
+    x_input = tf.placeholder(tf.float32, (None, 32, 32, 3), name = 'x_input')
+    y_input = tf.placeholder(tf.int32, (None), name = 'y_input')
+    def_weights_biases(model_config)   
+    
+    ## define inference model 
+    
+    logits = model(x_input, model_config)
+    softmax = tf.nn.softmax(logits)
+    y_onehot = tf.one_hot(y_input, 43)
+    accuracy_operation = model_accuracy(logits, y_onehot)
+    
+    starting_epoch = 1
+    logging_interval = 50
+    ending_epoch = starting_epoch + epochs - 1
+    epoch_i = 0
+    acc  = 0
+    ttl_batches  = 0 
+    test_accuracy = 0.0
+    if results is None:
+        results = defaultdict(list)
+
+    print('\n--- Current Inference parameters ---------------------------------------------------------------')
+    print(' Inference Epochs         : ', epochs,
+          '\n Starting epoch           : ', starting_epoch, '    Ending epoch :', ending_epoch,
+          '\n Batch Size               : ', batch_size, 
+          '\n Dropout rate             : ', model_config['drop_rate'],
+          '\n Inference Batches/epoch  : ', inference_batches,
+          '\n Model loading from       : ', ckpt_file)
+    print('------------------------------------------------------------------------------------------')
+
+    
+    # Measurements use for graphing loss and accuracy
+    # The accuracy measured against the validation set
+    y_pred = []
+    y_labels = []
+    
+    with tf.Session() as session:
+        saver = tf.train.Saver()   
+         
+        #  Load the weights and bias
+        try: 
+            saver.restore(session, ckpt_file)
+            print(' loaded saved model checkpoint from :', ckpt_file, flush=True)
+        except Exception as e:
+            print(' Unable to load model checkpoint :',  ckpt_file)
+            print(' Exception info :', e)
+            raise
+        
+        for epoch_i in range(starting_epoch, ending_epoch + 1, 1): 
+
+            ttl_test_accuracy = 0.0
+
+            # Progress bar
+            batches_pbar = tqdm(range(inference_batches), 
+                                desc='Epoch {:>2}/{} Training  '.format(epoch_i, ending_epoch), 
+                                postfix={'acc': acc },
+                                unit='batches', ncols =130)
+
+            # Training cycle (batch_i)
+            for _ in batches_pbar:
+                X_batch, y_batch = test_datagen.next()
+                test_accuracy , test_softmax, test_onehot = session.run([accuracy_operation, softmax, y_onehot],
+                                                                        feed_dict = {x_input: X_batch, y_input: y_batch}) 
+                batches_pbar.set_postfix( acc = '{:.4f}'.format(test_accuracy) )
+                y_pred.append(test_softmax)
+                y_labels.append(test_onehot)
+
+                ttl_test_accuracy += test_accuracy
+
+            test_accuracy = ttl_test_accuracy / inference_batches               
+                    
+            print("      EPOCH {} ... Testing Accuracy = {:.4f}  ".format(epoch_i, test_accuracy),   flush = True)
+    
+            ttl_batches += inference_batches     ## (batch_i % log_batch_step) 
+            results['bpe'] = inference_batches
+            results['batch_size'] = batch_size
+            results['epochs'].append(epoch_i)
+            results['batches'].append(ttl_batches)
+            results['test_acc'].append(test_accuracy)
+            results['model_file'] = ckpt_file
+            results['run_epochs'].append(ending_epoch)
+
+    return y_pred, y_labels

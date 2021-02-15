@@ -3,7 +3,6 @@ import os, sys
 import pickle
 import math
 import time
-import configparser
 import pprint
 import numpy as np
 import pandas as pd
@@ -63,17 +62,6 @@ parser = command_line_parser()
 args = parser.parse_args()
 display_input_parms(args)
 
-## Read Model cfg  
-
-config_file = configparser.ConfigParser()
-config_file.read('model_config.cfg')
-print(' Model configurations: ', config_file.sections())
-
-MODEL_ARCH = args.model_config
-mdl_config = get_from_config(config_file, MODEL_ARCH)
-# pp.pprint(mdl_config[MODEL_ARCH])
-
-
 ##------------------------------------------------------------------------------------
 ## Read data files
 ##------------------------------------------------------------------------------------
@@ -130,6 +118,9 @@ for i in range(0,half_len,1):
     else:
         print('\t\t ','-'*20)
 
+##-------------------------------------------------------------------------
+## Data Augmentation setup
+##-------------------------------------------------------------------------
 # Remove the previous weights and bias
 simple_gen_args = dict(featurewise_center=True,
                      featurewise_std_normalization = True,
@@ -168,63 +159,66 @@ num_val_examples = len(X_valid)
 print(X_train.shape, X_valid.shape)
 
 ##-------------------------------------------------------------------------
-##
+## Read training results file based on model architecture 
 ##-------------------------------------------------------------------------
-MODEL_ARCH = args.model_config
-
 print('\n\n')
 
 if args.results_filename is None:
-    results_filename = MODEL_ARCH+'_results_new'
-    results_key      = MODEL_ARCH+'_results_new'
+    results_filename = args.model_config + '_results_default_filename'
+    results_key      = args.model_config + '_results_default_filename'
     print(' Build NEW results file ', args.results_dir + results_filename )
     if os.path.isfile(args.results_dir + results_filename + '.pickle'):
         raise FileExistsError(' File '+ args.results_dir + results_filename + '.pickle', ' Already exists !!')
     results = defaultdict(defaultdict)
 else:
-    results_filename = args.results_filename
-    if os.path.isfile(args.results_dir + results_filename + '.pickle'):
-        results_dict = load_results(args.results_dir + args.results_filename)
-        results_key  = list(results_dict.keys())[0]
-        print(' Load existing results file ', args.results_dir + results_filename)
-        results = results_dict[results_key]
-    else:
+    results_filename = args.model_config + args.results_filename
+    print(' Load existing results file ', args.results_dir + results_filename)
+    # if os.path.isfile(args.results_dir + results_filename + '.pickle'):
+    #     results_dict = load_results(args.results_dir + results_filename, verbose =True)
+    #     results_key  = list(results_dict.keys())[0]
+    #     results = results_dict[results_key]
+    # else:
+    #     print(' Build new results file ', args.results_dir + results_filename)
+    #     results_key = args.results_filename
+    #     results = defaultdict(defaultdict)
+    #     print(results.keys())
+    if (results_dict := load_results(args.results_dir + results_filename, verbose =True)) == -1:
         print(' Build new results file ', args.results_dir + results_filename)
-        results_key = args.results_filename
+        results_key = results_filename
         results = defaultdict(defaultdict)
-        print(results.keys())
+        print(results.keys())        
+    else:
+        results_key  = list(results_dict.keys())[0]
+        results = results_dict[results_key]
 
     print('      Results key is ', results_key)
-    
+
+##-------------------------------------------------------------------------
+## Model and Training parameters 
+##-------------------------------------------------------------------------
+
+MODEL_ARCH = args.model_config
 BATCH_SIZES = args.batch_sizes     ## [256, 128, 64, 32, 16]
-TRAINING_SCHEDULE = [(200, 0.001), (100, 0.0005), (100, 0.0002), (100, 0.0001)]
+TRAINING_SCHEDULE =  args.training_schedule 
 
+# TRAINING_SCHEDULE = [(200, 0.001), (100, 0.0005), (100, 0.0002), (100, 0.0001)]
 # TRAINING_SCHEDULE = [(2, 0.001), (2, 0.0005), (2, 0.0002), (2, 0.0001)]
-# TRAINING_SCHEDULE = [(100, 0.0002), (100, 0.0001)]
+# TRAINING_SCHEDULE = [(100, 0.0002), (100, 0.0001)
+## Read Model cfg  
 
-# reload = True
-# BS_KEY = 'BS:'+str(BATCH_SIZES [0])
 
-##----------------------------------------------------------------------
+mdl_config = get_from_config('model_config.cfg', MODEL_ARCH)
+
 print()
 print(' Model parameters: ')
 print(' ------------------- ')
 for i,v in mdl_config[MODEL_ARCH].items():
     print('    {:.<35s} {}'.format(i,v) )
 
-# print(' Checkpt prefix  : ' , mdl_config[MODEL_ARCH]['ckpt_prefix'])
-# print(' Results Filename: ' , results_filename, '\t\t Results Dictionary Keyname:', results_dict)
-# print(' Reload flag     : ' , reload)
-# try:
-    # print(' last model ckpt: ', results[BS_KEY]['last_ckpt'])
-    # print(' last epoch ran : ', results[BS_KEY]['epochs'][-1])
-# except:
-    # print(' reload flag set to FALSE')
-    # reload = False
-    
-# print(' Reload flag    : ', reload)
-# print(' Batch size key : ', BS_KEY)
 
+##-------------------------------------------------------------------------
+## Run training  
+##-------------------------------------------------------------------------
 
 for BATCH_SIZE in BATCH_SIZES:
 

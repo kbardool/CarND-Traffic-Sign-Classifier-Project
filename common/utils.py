@@ -2,7 +2,9 @@ import os
 import pickle
 import math
 import time
+import ast
 import argparse
+import configparser
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -229,9 +231,24 @@ def display_training_results(r_dict, verbose = False):
     return 
 
 
+def display_inference_results(r_dict, verbose = False):
+
+    # print(r_dict[k1].keys())
+
+    print()
+    print('                      Batch    Batches      Inference     ')
+    print('  Key2      Epochs    Size     /Epoch       Accuracy      Weights File')
+    for k2 in sorted(r_dict.keys(), key = lambda x: int(x.split(':')[1]) ):
+        run_stats = r_dict[k2]
+        best_val_acc = run_stats.get('best_val_acc', 0)
+        print(' {:6s}   {:7d}  {:7d}   {:7d}       {:8.4f}       {}'.format(
+                k2, run_stats['epochs'][-1],  run_stats['batch_size'],  run_stats['bpe'], run_stats['test_acc'][-1], run_stats['model_file']))
+    return 
+
+
 def display_training_results2(r_dict, k1, verbose = False):
     
-    print('im here')
+    k1 = 'BS:'+str(k1)
     print(r_dict[k1].keys())
 
     print()
@@ -267,40 +284,173 @@ def display_training_results2(r_dict, k1, verbose = False):
             print('   {:5d}   {:10d}  {:10.4f}  {:10.4f}   {:10.4f}   {:10.4f}   {:10.4f}'.format(e,b,lr,ta,tl, va,vl))
     return 
 
+def display_training_schedule(dropout = False,archs = [0,1,2,3,4,5,6,7,8],verbose = False):
+    results_dir = './results/'
+    tbl = {}
+
+    for i in archs: 
+        
+        mdl = 'arch'+str(i)
+        mdl_dropout = '_dropout' if dropout else ''
+        tbl[mdl] = {}
+
+        filename= mdl+mdl_dropout+'_results_test'
+        pickle_file = results_dir + filename  
+        results_dict = load_results(results_dir+filename)
+       
+        if results_dict != -1:
+            load_key = list(results_dict.keys())[0]
+            test_results = results_dict[load_key]
+            results_keys = sorted(test_results.keys(), key = lambda x: int(x.split(':')[1]))
+            print('-'*140)
+            print('File : ', pickle_file, '   load_key : ',load_key,'   results_keys: ', results_keys)
+            print('-'*140)
+        else :
+            print('File : ', pickle_file, ' not found')
+            continue
+
+        results_keys = sorted(test_results.keys(), key = lambda x: int(x.split(':')[1]))
+        for bs_key in results_keys: 
+            bs = int(bs_key.split(':')[-1])
+
+            tbl[mdl][bs] = []
+
+            run_stats = test_results[bs_key]
+            print()
+            print('{:6s}  Start     End     '.format(bs_key))
+            print('        Epoch    Epoch     Learning Rate')
+            print('        -----    ------    -------------')
+            start_idx = 0
+            curr_lr = run_stats['learning_rate'][start_idx]
+            for idx, lr in enumerate(run_stats['learning_rate']):
+                if lr != curr_lr :
+                    print('      {:6d}    {:6d}     {:9.4f}    '.format(start_idx+1, idx, curr_lr))
+                    curr_lr = lr
+                    start_idx = idx
+        
+            print('      {:6d}    {:6d}     {:9.4f} '.format(start_idx+1, idx+1,curr_lr))
+        print()
+    return
+
+
+def build_arch_training_results(dropout = False, archs = [0,1,2,3,4,5,6,7,8], verbose = False):
+    results_dir = './results/'
+    tbl = {}
+
+    for i in archs: 
+        
+        mdl = 'arch'+str(i)
+        mdl_dropout = '_dropout' if dropout else ''
+        tbl[mdl] = {}
+        
+        filename= mdl+mdl_dropout+'_results_test'
+        pickle_file = results_dir + filename  
+        results_dict = load_results(results_dir+filename)
+       
+        if results_dict != -1:
+            load_key = list(results_dict.keys())[0]
+            test_results = results_dict[load_key]
+            results_keys = sorted(test_results.keys(), key = lambda x: int(x.split(':')[1]))
+            print('File : ', pickle_file, '   load_key : ',load_key,'   results_keys: ', results_keys)
+
+        else :
+            print('File : ', pickle_file, ' not found')
+            continue
+
+        
+        for bs_key in results_keys:
+            bs = int(bs_key.split(':')[-1])
+
+            tbl[mdl][bs] = []
+
+            run_stats = test_results[bs_key]
+
+            at_epochs = [50,100,200,300,400,500]
+            at_idx = 0
+            if verbose:
+                print()
+                print(' {:6s}           Actual    Validation '.format(bs_key))
+                print(' Ckpt   Epoch     Epoch     Accuracy      Checkpoint filename  ')
+                print(' ----   -----    ------    ----------     ---------------------------------------')
+            for idx, (ep,ck,ac) in enumerate(zip(run_stats['run_epochs'], run_stats['run_ckpts'],run_stats['run_ckpt_acc']),1):
+                if ep >= at_epochs[at_idx]:
+                    tbl[mdl][bs].append((ep, ac))
+                    if verbose:
+                        print(' {:4d}  {:6d}    {:6d}   {:9.4f}      {} '.format(idx,at_epochs[at_idx], ep,  ac,ck))
+                    at_idx +=1
+            if verbose:
+                print(' {:4d}  {:6d}    {:6d}   {:9.4f}      {} '.format(idx,at_epochs[at_idx], ep,  ac,ck))
+            tbl[mdl][bs].append((ep, ac))
+        if verbose:
+            print()
+    return tbl
+
+
+def display_arch_training_results(tbl, archs = [0,1,2,3,4,5,6,7,8], batch_size = None):
+    if isinstance(batch_size, int):
+        batch_size = [batch_size]
+    elif batch_size is None:
+        batch_size = [32, 64, 128, 256]
+    print( ' table keys : ', tbl.keys())
+    table_keys = list(tbl.keys())
+    for  bs in batch_size:
+        print('\nBatchsize: ', bs)
+        hdr = '|'.join(['{:^10s}'.format(mdl) for mdl in table_keys])
+        hdr = '| epochs |'+ hdr + '|'
+        print(hdr)
+        hdr = ':|:'.join(['--------'.format(mdl) for mdl in table_keys])
+        hdr = '|:------:|:'+ hdr + ':|'
+        print(hdr) 
+
+        for ix, ep in enumerate([50,100,200,300,400,500]):
+            ln = '|{:^8d}'.format(ep)
+            for mdl in table_keys:
+                try:
+                    ln += '|{:^10.4f}'.format(tbl[mdl][bs][ix][1])  
+                except IndexError:
+                    # print(mdl,tbl[mdl][bs], ix)
+                    ln += '|{:^10.4f}'.format(tbl[mdl][bs][-1][1])  
+                except KeyError :
+                    ln += '|  ------  '
+            ln += '|'
+            print(ln)
+        
 ##----------------------------------------------------------------------
 ## plot training results
 ##----------------------------------------------------------------------   
-def plot_training_results(r_dict, bs_keys = None, batches = False, rolling_window = 1):
+def plot_training_results(r_dict, batch_size = None, batches = False, rolling_window = 1, title = ''):
     plt.style.use('ggplot')
-    print(r_dict.keys())
-    if bs_keys is None:
-        bs_keys = sorted(r_dict.keys(), key = lambda x: int(x.split(':')[1]) )
+ 
+    if batch_size is None:
+        batch_size = sorted(r_dict.keys(), key = lambda x: int(x.split(':')[1]) )
     else: 
-        bs_keys = bs_keys if isinstance(bs_keys,list) else [bs_keys]
-    print(' bs keys :', bs_keys)
+        batch_size = batch_size if isinstance(batch_size,list) else [batch_size]
+    # print(' bs keys :', batch_size)
 
-    for bs_key in bs_keys:
+    for bs_key in batch_size:
         fig = plt.figure(figsize=(20, 5))
         
         units = 'batches' if batches else 'epochs'
 
         loss_plot = plt.subplot(121)
-        loss_plot.set_title('Loss : batch size:  {} '.format(r_dict[bs_key]['batch_size']))
+        loss_plot.set_title('{} - Training Results (Loss) -  batch size: {} '.format(title, r_dict[bs_key]['batch_size']))
         trn_rolling_mean = pd.Series(r_dict[bs_key]['trn_loss']).rolling(window=rolling_window).mean()
         val_rolling_mean = pd.Series(r_dict[bs_key]['val_loss']).rolling(window=rolling_window).mean()
         loss_plot.plot(r_dict[bs_key][units], trn_rolling_mean, 'orange', linestyle= 'dashed', label='Training Loss')
-        loss_plot.plot(r_dict[bs_key][units], val_rolling_mean, 'g', label='Validation Loss')
-        loss_plot.set_xlim([r_dict[bs_key][units][0], r_dict[bs_key][units][-1]])
+        loss_plot.plot(r_dict[bs_key][units], val_rolling_mean, 'green', label='Validation Loss')
+        loss_plot.set_xlim([r_dict[bs_key][units][0]-1, r_dict[bs_key][units][-1]])
+        loss_plot.set_ylim(-0.1, 2.5)
         loss_plot.set_xlabel(units)
         loss_plot.legend(loc='best')
         
         acc_plot = plt.subplot(122)
-        acc_plot.set_title('Accuracy : batch size:  {}'.format(r_dict[bs_key]['batch_size']))
+        acc_plot.set_title('{} - Training Results (Accuracy) - batch size: {}'.format(title, r_dict[bs_key]['batch_size']))
         trn_rolling_mean = pd.Series(r_dict[bs_key]['trn_acc']).rolling(window=rolling_window).mean()
         val_rolling_mean = pd.Series(r_dict[bs_key]['val_acc']).rolling(window=rolling_window).mean()
         acc_plot.plot(r_dict[bs_key][units],  trn_rolling_mean, 'orange', linestyle= 'dashed', label='Training Accuracy')
-        acc_plot.plot(r_dict[bs_key][units],  val_rolling_mean, 'r' , label='Validation Accuracy')
-        acc_plot.set_xlim([r_dict[bs_key][units][0], r_dict[bs_key][units][-1]])
+        acc_plot.plot(r_dict[bs_key][units],  val_rolling_mean, 'green' , label='Validation Accuracy')
+        acc_plot.set_xlim([r_dict[bs_key][units][0]-1, r_dict[bs_key][units][-1]])
+        acc_plot.set_ylim(-0.0, 1.05)
         acc_plot.set_xlabel(units)
         acc_plot.legend(loc='best')
 
@@ -308,11 +458,12 @@ def plot_training_results(r_dict, bs_keys = None, batches = False, rolling_windo
     plt.show()
 
 
-def plot_training_results_by_batchsize(r_dict,  batches = False, rolling_window = 10):
+def plot_training_results_by_batchsize(r_dict,  batches = False, rolling_window = 10, title = ''):
     plt.style.use('ggplot')
     fig = plt.figure(figsize=(20, 10))
     key = ''
-    bs_keys = sorted(r_dict.keys(), key = lambda x: int(x.split(':')[1]) )
+    batch_size = sorted(r_dict.keys(), key = lambda x: int(x.split(':')[1]) )
+    print(' batch sizes:', batch_size)
     units = 'batches' if batches else 'epochs'
  
     y_lims = [0.6, 1.02]
@@ -320,8 +471,8 @@ def plot_training_results_by_batchsize(r_dict,  batches = False, rolling_window 
     
     ##Training Loss by batch size 
     loss_plot = plt.subplot(221)
-    loss_plot.set_title('Training Loss by batch size')
-    for key in bs_keys:
+    loss_plot.set_title(title + ' - Training Loss by batch size')
+    for key in batch_size:
         rolling_mean = pd.Series(r_dict[key]['trn_loss']).rolling(window=rolling_window).mean()
         loss_plot.plot(r_dict[key][units],  rolling_mean, label=key)
         # loss_plot.set_xlim([r_dict[key][units][0], r_dict[key][units][-1]])
@@ -331,8 +482,8 @@ def plot_training_results_by_batchsize(r_dict,  batches = False, rolling_window 
 
     ##Training Accuracy by batch size 
     acc_plot = plt.subplot(222)
-    acc_plot.set_title('Training accuracy by batch size')
-    for key in bs_keys:
+    acc_plot.set_title(title + ' - Training Accuracy by batch size')
+    for key in batch_size:
         rolling_mean = pd.Series(r_dict[key]['trn_acc']).rolling(window=rolling_window).mean()
         acc_plot.plot(r_dict[key][units],  rolling_mean, label=key)
     acc_plot.set_xlabel(units)
@@ -342,8 +493,8 @@ def plot_training_results_by_batchsize(r_dict,  batches = False, rolling_window 
     
     ##Validation Loss by batch size 
     loss_plot = plt.subplot(223)
-    loss_plot.set_title('Validation Loss by batch size')
-    for key in bs_keys:
+    loss_plot.set_title(title + ' - Validation Loss by batch size')
+    for key in batch_size:
         rolling_mean = pd.Series(r_dict[key]['val_loss']).rolling(window=rolling_window).mean()
         loss_plot.plot(r_dict[key][units],  rolling_mean, label=key)
     loss_plot.set_xlim(x_lims)
@@ -352,8 +503,8 @@ def plot_training_results_by_batchsize(r_dict,  batches = False, rolling_window 
 
     ##Training Accuracy by batch size 
     acc_plot = plt.subplot(224)
-    acc_plot.set_title('Validation accuracy by batch size')
-    for key in bs_keys:
+    acc_plot.set_title(title + '  - Validation accuracy by batch size')
+    for key in batch_size:
         rolling_mean = pd.Series(r_dict[key]['val_acc']).rolling(window=rolling_window).mean()
         acc_plot.plot(r_dict[key][units],  rolling_mean, label=key)
     acc_plot.set_xlim(x_lims)
@@ -367,18 +518,22 @@ def plot_training_results_by_batchsize(r_dict,  batches = False, rolling_window 
 
 
 ##----------------------------------------------------------------------
-## plot results
+## Pickle file save and load
 ##----------------------------------------------------------------------   
-
-def save_results(filename, results, results_name):
+def save_results2(pickle_file, results, results_key = None):
 # Save the data for easy access
-    pickle_file = filename+'.pickle'
+    if pickle_file.rfind('.pickle') == -1:
+        pickle_file = pickle_file+'.pickle'
 
     print(' Saving data to pickle file...')
+    if results_key is None:
+        save_dict = results
+    else:
+        save_dict  = dict(results_key = results)
     try:
         with open(pickle_file, 'wb') as pfile:
             pickle.dump(
-                {results_name: results},
+                save_dict,
                 pfile, 
                 pickle.HIGHEST_PROTOCOL)
     except Exception as e:
@@ -386,25 +541,52 @@ def save_results(filename, results, results_name):
         raise
     else:
         print(' Data saved to pickle file.', pickle_file)
-    return 
+    return 1
 
-def load_results(filename):
-    pickle_file = filename+'.pickle'
+def save_results(pickle_file, results, results_key):
+# Save the data for easy access
+    if pickle_file.rfind('.pickle') == -1:
+        pickle_file = pickle_file+'.pickle'
 
-    if os.path.isfile(pickle_file):
-        try:
-            # Reload the data
-            with open(pickle_file, 'rb') as f:
-                pickle_data = pickle.load(f)
-        except Exception as e:
-            print(' Unable to load data from', pickle_file, ':', e)
-            raise
-        else:
-            print(' Data loaded from pickle_data. Variable name : ', pickle_data.keys())
-            return pickle_data    
+    print(' Saving data to pickle file...')
+    try:
+        with open(pickle_file, 'wb') as pfile:
+            pickle.dump(
+                {results_key: results},
+                pfile, 
+                pickle.HIGHEST_PROTOCOL)
+    except Exception as e:
+        print(' Unable to save data to', pickle_file, ':', e)
+        raise
     else:
-        print(' Error pickle file not found ...')
+        print(' Data saved to pickle file.', pickle_file)
+    return 1
 
+def load_results(pickle_file, verbose= False):
+    if pickle_file.rfind('.pickle') == -1:
+        pickle_file = pickle_file+'.pickle'
+
+    # if os.path.isfile(pickle_file):
+    try:
+        # Reload the data
+        with open(pickle_file, 'rb') as f:
+            pickle_data = pickle.load(f)
+    except FileNotFoundError as e: 
+        if verbose:
+            print(' File not found : ', pickle_file)
+        return -1
+    except Exception as e:
+        if verbose:
+            print(' Unable to load data from', pickle_file, ':', e)
+        raise
+    else:
+        if verbose:
+            print(' Data loaded from pickle_data. load key : ', pickle_data.keys())
+        return pickle_data    
+    # else:
+        # if verbose:
+            # print(' Error pickle file not found ...')
+        # return -1
 
 ##------------------------------------------------------------------------------------
 ## Parse command line arguments
@@ -414,20 +596,10 @@ def load_results(filename):
 ## args = parser.parse_args("train --dataset E:\MLDatasets\coco2014 --model mask_rcnn_coco.h5 --limit 10".split())
 ##------------------------------------------------------------------------------------
 def command_line_parser():
+    def training_schedule(input):
+        return eval(input)
+
     parser = argparse.ArgumentParser(description='Train Mask R-CNN on MS COCO.')
-
-    # parser.add_argument("command",
-                        # metavar="<command>",
-                        # help="'train' or 'evaluate' on MS COCO")
-
-    # parser.add_argument('--dataset', required=True,
-                        # metavar="/path/to/coco/",
-                        # help='Directory of the MS-COCO dataset')
-    
-    # parser.add_argument('--limit', required=False,
-                        # default=500,
-                        # metavar="<image count>",
-                        # help='Images to use for evaluation (defaults=500)')
 
     parser.add_argument('--model_config', 
                         required=True,
@@ -457,7 +629,7 @@ def command_line_parser():
 
     parser.add_argument('--results_filename', 
                         required=False,
-                        default=None,  
+                        default='_results_test',  
                         metavar="<results folder>",
                         help="Model checkpoints directory (default=./results/)")
 
@@ -468,9 +640,9 @@ def command_line_parser():
                         help="Model checkpoints directory (default=./results/)")
 
     parser.add_argument('--training_schedule', 
-                        required=False,
+                        required=True,
                         nargs = '+',
-                        default=None, type=int, 
+                        default='(100, 0.001)', type=training_schedule, 
                         metavar="<active coco classes>",
                         help="<identifies active coco classes" )
 
@@ -489,6 +661,18 @@ def command_line_parser():
                         metavar="<val steps in each epoch>",
                         help="Number of validation batches to run at end of each epoch (default=1)")
                         
+    # parser.add_argument("command",
+                        # metavar="<command>",
+                        # help="'train' or 'evaluate' on MS COCO")
+
+    # parser.add_argument('--dataset', required=True,
+                        # metavar="/path/to/coco/",
+                        # help='Directory of the MS-COCO dataset')
+    
+    # parser.add_argument('--limit', required=False,
+                        # default=500,
+                        # metavar="<image count>",
+                        # help='Images to use for evaluation (defaults=500)')
 
     # parser.add_argument('--mrcnn_exclude_layers', 
     #                     required=False,
@@ -601,8 +785,12 @@ def display_input_parms(args):
             print("   {:30} {}".format(a, getattr(args, a)))
     print("\n")
  
-def get_from_config(config_file, arch):
+def get_from_config(config_filename, arch):
     config_dict = {arch : {}}
+
+    config_file = configparser.ConfigParser()
+    config_file.read(config_filename)
+    print(' Model configurations: ', config_file.sections())
 
     for opt in config_file[arch].keys():
         # print(opt, '    ', config_file[arch][opt])
@@ -612,5 +800,6 @@ def get_from_config(config_file, arch):
             config_dict[arch][opt] = config_file.getfloat(arch,opt)
         else:
             config_dict[arch][opt] = config_file.getint(arch,opt)
-
+    
+    config_dict[arch]['ckpt_prefix'] = arch
     return config_dict
